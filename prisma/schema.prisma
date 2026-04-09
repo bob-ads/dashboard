@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  CLIENT
+}
+
+enum DataCategory {
+  AD_METRICS
+  LEADS
+  SALES
+  CUSTOM
+}
+
+enum DataType {
+  NUMBER
+  CURRENCY
+  PERCENTAGE
+  TEXT
+  DATE
+}
+
+enum WidgetType {
+  KPI_CARD
+  LINE_CHART
+  BAR_CHART
+  FUNNEL
+  DATA_TABLE
+  COMPARISON_CARD
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  role         Role
+  clientId     String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client Client? @relation(fields: [clientId], references: [id])
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user            User?
+  sheetConfigs    SheetConfig[]
+  widgetConfigs   WidgetConfig[]
+  shareLinks      ShareLink[]
+  cachedSheetData CachedSheetData[]
+}
+
+model SheetConfig {
+  id             String       @id @default(cuid())
+  clientId       String
+  spreadsheetId  String
+  spreadsheetUrl String
+  tabName        String
+  dataCategory   DataCategory
+  dateColumn     String
+  dateFormat     String       @default("MM/dd/yyyy")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  client         Client          @relation(fields: [clientId], references: [id])
+  columnMappings ColumnMapping[]
+
+  @@unique([clientId, spreadsheetId, tabName])
+}
+
+model ColumnMapping {
+  id            String    @id @default(cuid())
+  sheetConfigId String
+  sheetColumn   String
+  metricKey     String
+  dataType      DataType
+  displayName   String
+
+  sheetConfig SheetConfig @relation(fields: [sheetConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([sheetConfigId, sheetColumn])
+}
+
+model WidgetConfig {
+  id         String     @id @default(cuid())
+  clientId   String
+  widgetType WidgetType
+  title      String
+  position   Int
+  gridWidth  Int        @default(6)
+  gridHeight Int        @default(1)
+  config     Json
+  isVisible  Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model ShareLink {
+  id        String    @id @default(cuid())
+  clientId  String
+  token     String    @unique @default(cuid())
+  label     String?
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model CachedSheetData {
+  id            String   @id @default(cuid())
+  clientId      String
+  sheetConfigId String
+  dataDate      DateTime @db.Date
+  metricKey     String
+  metricValue   Float
+  rawValue      String?
+  syncedAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, sheetConfigId, dataDate, metricKey])
+  @@index([clientId, dataDate])
+  @@index([clientId, metricKey, dataDate])
+}
